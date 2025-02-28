@@ -1,0 +1,228 @@
+
+// HTML test page (save as test.html)
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Comment System Test</title>
+  <style>
+      body {
+          font-family: Arial, sans-serif;
+          max-width: 800px;
+          margin: 20px auto;
+          padding: 0 20px;
+      }
+      .form-group {
+          margin-bottom: 15px;
+      }
+      label {
+          display: block;
+          margin-bottom: 5px;
+      }
+      input[type="text"],
+      textarea {
+          width: 100%;
+          padding: 8px;
+          margin-bottom: 10px;
+      }
+      button {
+          padding: 10px 15px;
+          background-color: #007bff;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+      }
+      button:hover {
+          background-color: #0056b3;
+      }
+      #response {
+          margin-top: 20px;
+          padding: 10px;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          white-space: pre-wrap;
+      }
+      .error {
+          color: red;
+      }
+      .success {
+          color: green;
+      }
+  </style>
+</head>
+<body>
+  <h2>Comment System Test</h2>
+  
+  <!-- Send Message Form -->
+  <div>
+      <h3>Send Message</h3>
+      <form id="messageForm">
+          <div class="form-group">
+              <label>Project ID:</label>
+              <input type="text" id="project_id" required>
+          </div>
+          
+          <div class="form-group">
+              <label>Task ID (optional):</label>
+              <input type="text" id="task_id">
+          </div>
+          
+          <div class="form-group">
+              <label>Creator ID:</label>
+              <input type="text" id="creator_id" required>
+          </div>
+          
+          <div class="form-group">
+              <label>Content (optional if file attached):</label>
+              <textarea id="content" rows="4"></textarea>
+          </div>
+          
+          <div class="form-group">
+              <label>File (optional if content provided):</label>
+              <input type="file" id="file">
+          </div>
+          
+          <div class="form-group">
+              <label>Auth Token:</label>
+              <input type="text" id="authToken" required>
+          </div>
+          
+          <button type="submit">Send Message</button>
+      </form>
+  </div>
+
+  <!-- Download File Form -->
+  <div style="margin-top: 30px;">
+      <h3>Download File</h3>
+      <form id="downloadForm">
+          <div class="form-group">
+              <label>Comment ID:</label>
+              <input type="text" id="comment_id" required>
+          </div>
+          
+          <div class="form-group">
+              <label>Auth Token:</label>
+              <input type="text" id="downloadAuthToken" required>
+          </div>
+          
+          <button type="submit">Download File</button>
+      </form>
+  </div>
+
+  <!-- Response Display -->
+  <div id="response"></div>
+
+  <script>
+      // Helper function to display responses
+      function showResponse(message, isError = false) {
+          const responseDiv = document.getElementById('response');
+          responseDiv.className = isError ? 'error' : 'success';
+          responseDiv.textContent = typeof message === 'object' ? 
+              JSON.stringify(message, null, 2) : message;
+      }
+
+      // Send Message Form Handler
+      document.getElementById('messageForm').addEventListener('submit', async (e) => {
+          e.preventDefault();
+          
+          try {
+              const formData = new FormData();
+              const file = document.getElementById('file').files[0];
+              
+              // Create the request body
+              const requestBody = {
+                  project_id: document.getElementById('project_id').value,
+                  creator_id: document.getElementById('creator_id').value,
+                  content: document.getElementById('content').value
+              };
+
+              // Add optional task_id if provided
+              const taskId = document.getElementById('task_id').value;
+              if (taskId) {
+                  requestBody.task_id = taskId;
+              }
+
+              // If file is selected, add file data
+              if (file) {
+                  const reader = new FileReader();
+                  reader.onload = async (e) => {
+                      requestBody.file = {
+                          fileName: file.name,
+                          fileType: file.type,
+                          fileSize: file.size,
+                          data: e.target.result.split(',')[1] // Remove data URL prefix
+                      };
+
+                      // Send the request
+                      const response = await fetch('http://localhost:3001/comment/send-message', {
+                          method: 'POST',
+                          headers: {
+                              'Content-Type': 'application/json',
+                              'Authorization': document.getElementById('authToken').value
+                          },
+                          body: JSON.stringify(requestBody)
+                      });
+
+                      const data = await response.json();
+                      showResponse(data, !response.ok);
+                  };
+                  reader.readAsDataURL(file);
+              } else {
+                  // Send request without file
+                  const response = await fetch('http://localhost:3001/comment/send-message', {
+                      method: 'POST',
+                      headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': document.getElementById('authToken').value
+                      },
+                      body: JSON.stringify(requestBody)
+                  });
+
+                  const data = await response.json();
+                  showResponse(data, !response.ok);
+              }
+          } catch (error) {
+              showResponse(error.message, true);
+          }
+      });
+
+      // Download Form Handler
+      document.getElementById('downloadForm').addEventListener('submit', async (e) => {
+          e.preventDefault();
+          
+          try {
+              const commentId = document.getElementById('comment_id').value;
+              const authToken = document.getElementById('downloadAuthToken').value;
+
+              const response = await fetch(`http://localhost:3001/comment/download/${commentId}`, {
+                  headers: {
+                      'Authorization': authToken
+                  }
+              });
+
+              if (!response.ok) {
+                  const errorData = await response.json();
+                  throw new Error(errorData.message || 'Download failed');
+              }
+
+              // Create blob from response and trigger download
+              const blob = await response.blob();
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = response.headers.get('Content-Disposition')?.split('filename=')[1] || 'download';
+              document.body.appendChild(a);
+              a.click();
+              window.URL.revokeObjectURL(url);
+              a.remove();
+
+              showResponse('File downloaded successfully');
+          } catch (error) {
+              showResponse(error.message, true);
+          }
+      });
+  </script>
+</body>
+</html>

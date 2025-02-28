@@ -1,0 +1,195 @@
+/* General Video Conference Layout */
+.video-conference {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background-color: #121212;
+  color: white;
+  position: relative;
+}
+
+/* Video Grid Layout */
+.video-grid {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 80vh;
+}
+
+/* Responsive Video Grid */
+.video-grid:not(.screen-active) {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.video-grid.screen-active {
+  grid-template-columns: 1fr 2fr;
+}
+
+/* Video Box */
+.video-box {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 2px solid #fff;
+  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease-in-out;
+  background: black;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.video-box p {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+/* Active Speaker Highlight */
+.active-speaker {
+  border: 3px solid #00ff00;
+  transform: scale(1.05);
+}
+
+/* Screen Sharing */
+.screen-active .video-box {
+  width: 30%;
+  max-width: 400px;
+}
+
+.screen-share-container {
+  grid-column: span 2;
+  width: 100%;
+  height: 100%;
+}
+
+.screen-share-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Call Controls */
+.call-controls {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 10px;
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.control-btn {
+  padding: 12px 18px;
+  font-size: 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.2s ease-in-out;
+  border: none;
+  color: white;
+}
+
+.mic-btn { background-color: #4caf50; }
+.mic-btn.off { background-color: #d32f2f; }
+.camera-btn { background-color: #2196f3; }
+.camera-btn.off { background-color: #d32f2f; }
+.share-btn { background-color: #ff9800; }
+.share-btn.active { background-color: #f57c00; }
+.end-call-btn { background-color: #d32f2f; }
+.participants-btn { background-color: #673ab7; }
+
+/* Hover Effects */
+.control-btn:hover {
+  opacity: 0.8;
+}
+
+/* Participants Sidebar */
+.participants-sidebar {
+  position: fixed;
+  right: -300px;
+  top: 0;
+  width: 280px;
+  height: 100%;
+  background: #000; /* Changed to Black */
+  transition: right 0.3s ease-in-out;
+  box-shadow: -4px 0 8px rgba(0, 0, 0, 0.6); /* Stronger Shadow for Visibility */
+  padding: 15px;
+  color: white;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.participants-sidebar.open {
+  right: 0;
+}
+
+/* Sidebar Header */
+.participants-sidebar h3 {
+  text-align: center;
+  margin-bottom: 10px;
+  font-size: 18px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #444;
+}
+
+/* Participant Item */
+.participant-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px;
+  border-bottom: 1px solid #555;
+}
+
+/* Participant Name */
+.participant-name {
+  font-size: 14px;
+  font-weight: bold;
+  flex: 1;
+}
+
+/* Status Icons */
+.status-icons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.status-icons span {
+  font-size: 18px;
+}
+
+
+
+.participants-btn {
+  background-color: #673ab7; /* Purple color */
+  padding: 12px 18px;
+  font-size: 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.2s ease-in-out;
+  border: none;
+  color: white;
+}
+
+.participants-btn:hover {
+  opacity: 0.8;
+}
+
+
+.mic-on { color: #4caf50; }
+.mic-off { color: #d32f2f; }
+.camera-on { color: #2196f3; }
+.camera-off { color: #d32f2f; }
