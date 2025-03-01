@@ -29,8 +29,8 @@ Before you begin, ensure you have the following installed:
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/MentorTeamSync/teamsync_Infosys_Internship_Oct2024.git
-cd teamsync_Infosys_Internship_Oct2024
+https://github.com/ARK-Pay/Collabify.git
+cd collabify
 ```
 
 ### 2. Backend Setup
