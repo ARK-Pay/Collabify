@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import "./VideoConference.css";
+import axios from "axios";
 
 const socket = io("http://127.0.0.1:3001", {
   transports: ["websocket"],
@@ -15,7 +16,10 @@ const VideoConference = ({ roomId }) => {
   const [screenSharing, setScreenSharing] = useState(false);
   const [screenStream, setScreenStream] = useState(null);
   const [activeSpeaker, setActiveSpeaker] = useState(null);
-  
+  const [meetingSummary, setMeetingSummary] = useState("");
+  const [loadingSummary, setLoadingSummary] = useState(false);
+  const [meetingTranscript, setMeetingTranscript] = useState("");
+
   const myVideo = useRef();
   const screenVideo = useRef();
 
@@ -155,6 +159,33 @@ const VideoConference = ({ roomId }) => {
   startMedia();
 }, [roomId]);
 
+
+useEffect(() => {
+  if (!("SpeechRecognition" in window || "webkitSpeechRecognition" in window)) {
+    console.log("Speech recognition not supported in this browser.");
+    return;
+  }
+
+  const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = "en-US";
+
+  recognition.onresult = (event) => {
+    let transcript = "";
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      transcript += event.results[i][0].transcript + " ";
+    }
+    setMeetingTranscript(transcript);
+  };
+
+  recognition.start();
+
+  return () => recognition.stop(); // Stop recognition when component unmounts
+}, []);
+
+
+
 useEffect(() => {
   if (!stream) return;
 
@@ -181,8 +212,21 @@ useEffect(() => {
       socket.emit("mic-toggle", { userId: socket.id, micOn: audioTrack.enabled });
     }
   };
+
   
+  const fetchTranscript = async () => {
+    try {
+      const response = await fetch("http://localhost:5000/api/transcribe");
+      const data = await response.json();
+      if (data.transcript) {
+        setMeetingTranscript(data.transcript); // Store the transcript
+      }
+    } catch (error) {
+      console.error("Error fetching transcript:", error);
+    }
+  };
   
+
   const toggleCamera = () => {
     if (stream) {
       const videoTrack = stream.getVideoTracks()[0];
@@ -197,6 +241,7 @@ useEffect(() => {
       socket.emit("camera-toggle", { userId: socket.id, cameraOn: videoTrack.enabled });
     }
   };
+  
   
   
   
@@ -233,6 +278,27 @@ useEffect(() => {
       stopScreenShare();
     }
   };
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if (!SpeechRecognition) {
+  console.error("SpeechRecognition not supported in this browser.");
+} else {
+  const recognition = new SpeechRecognition();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+
+  recognition.onresult = (event) => {
+    let transcript = "";
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      transcript += event.results[i][0].transcript + " ";
+    }
+    console.log("Transcript:", transcript);
+  };
+
+  recognition.start();
+}
+
   
 
 const stopScreenShare = () => {
@@ -258,6 +324,79 @@ const updateParticipant = (userId, changes) => {
 };
 
 
+const startTranscription = async () => {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+  const mediaRecorder = new MediaRecorder(stream);
+  mediaRecorder.start();
+
+  let audioChunks = [];
+  mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
+
+  mediaRecorder.onstop = async () => {
+    const audioBlob = new Blob(audioChunks, { type: "audio/wav" });
+    const formData = new FormData();
+    formData.append("audio", audioBlob);
+
+    const response = await fetch("http://localhost:5000/api/transcribe", {
+      method: "POST",
+      body: formData,
+    });
+
+    const data = await response.json();
+    console.log("Transcript:", data.transcript);
+  };
+
+  setTimeout(() => mediaRecorder.stop(), 30000); // Stop after 30 sec (adjust as needed)
+};
+
+const handleSummarizeMeeting = async () => {
+  if (!meetingTranscript || meetingTranscript.trim() === "") {
+    alert("❌ No transcript found! Please speak during the call.");
+    return;
+  }
+
+  try {
+    const response = await fetch("http://localhost:5000/api/summarize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: meetingTranscript }),
+    });
+
+    const data = await response.json();
+    if (data.summary) {
+      setMeetingSummary(data.summary);
+    } else {
+      alert("❌ Failed to generate summary. Try again.");
+    }
+  } catch (error) {
+    console.error("Error summarizing meeting:", error);
+    alert("❌ Error connecting to AI summarizer.");
+  }
+};
+
+
+
+
+const downloadSummary = () => {
+  if (!meetingSummary) {
+    alert("No summary available to download!");
+    return;
+  }
+
+  const element = document.createElement("a");
+  const file = new Blob([meetingSummary], { type: "text/plain" });
+  element.href = URL.createObjectURL(file);
+  element.download = "meeting_summary.txt";
+  document.body.appendChild(element);
+  element.click();
+  document.body.removeChild(element);
+};
+
+
+
+
+
   const handleEndCall = () => {
     if (stream) stream.getTracks().forEach((track) => track.stop());
     if (screenStream) screenStream.getTracks().forEach((track) => track.stop());
@@ -265,53 +404,69 @@ const updateParticipant = (userId, changes) => {
     window.location.href = "/video-call";
   };
 
-  return (
-    <div className="video-conference">
-      <div className={`participants-sidebar ${showParticipants ? "open" : ""}`}>
-  <h3>Participants</h3>
-  <ul>
-    {participants.map((p) => (
-      <li key={p.id} className="participant-item">
-        {p.name || `User ${p.id.slice(-4)}`}  
-        {p.micOn ? "🎤" : "🔇"}  
-        {p.cameraOn ? "📷" : "📷❌"}
-      </li>
-    ))}
-  </ul>
-</div>
+  
 
-      <div className={`video-grid ${screenSharing ? "screen-active" : ""}`}>
-        <video ref={myVideo} autoPlay muted className={`video-box ${activeSpeaker === socket.id ? "active-speaker" : ""}`} />
-        {remoteStreams.map((stream, index) => (
-          <video key={index} autoPlay className={`video-box ${activeSpeaker === stream.userId ? "active-speaker" : ""}`} ref={(ref) => ref && (ref.srcObject = stream)} />
+
+return (
+  <div className="video-conference">
+    <div className={`participants-sidebar ${showParticipants ? "open" : ""}`}>
+      <h3>Participants</h3>
+      <ul>
+        {participants.map((p) => (
+          <li key={p.id} className="participant-item">
+            {p.name || `User ${p.id.slice(-4)}`}  
+            {p.micOn ? "🎤" : "🔇"}  
+            {p.cameraOn ? "📷" : "📷❌"}
+          </li>
         ))}
-        {screenSharing && (
-          <div className="screen-share-container">
-            <video ref={screenVideo} autoPlay className="screen-share-video" />
-          </div>
-        )}
-      </div>
+      </ul>
+    </div>
 
-      <div className="call-controls">
-        <button className={`control-btn mic-btn ${micOn ? "" : "off"}`} onClick={toggleMic}>
-          {micOn ? "Mute Mic" : "Unmute Mic"}
-        </button>
-        <button className={`control-btn camera-btn ${cameraOn ? "" : "off"}`} onClick={toggleCamera}>
-          {cameraOn ? "Turn Off Camera" : "Turn On Camera"}
-        </button>
-        <button className={`control-btn share-btn ${screenSharing ? "active" : ""}`} onClick={toggleScreenShare}>
-          {screenSharing ? "Stop Sharing" : "Share Screen"}
-        </button>
-        <button className="control-btn end-call-btn" onClick={handleEndCall}>
-          End Call
-        </button>
-        <button className="control-btn" onClick={toggleParticipants}>
+    <div className={`video-grid ${screenSharing ? "screen-active" : ""}`}>
+      <video ref={myVideo} autoPlay muted className={`video-box ${activeSpeaker === socket.id ? "active-speaker" : ""}`} />
+      {remoteStreams.map((stream, index) => (
+        <video key={index} autoPlay className={`video-box ${activeSpeaker === stream.userId ? "active-speaker" : ""}`} ref={(ref) => ref && (ref.srcObject = stream)} />
+      ))}
+      {screenSharing && (
+        <div className="screen-share-container">
+          <video ref={screenVideo} autoPlay className="screen-share-video" />
+        </div>
+      )}
+    </div>
+
+    <div className="call-controls">
+  <button className={`control-btn mic-btn ${micOn ? "" : "off"}`} onClick={toggleMic}>
+    {micOn ? "Mute Mic" : "Unmute Mic"}
+  </button>
+  
+  <button className={`control-btn camera-btn ${cameraOn ? "" : "off"}`} onClick={toggleCamera}>
+    {cameraOn ? "Turn Off Camera" : "Turn On Camera"}
+  </button>
+
+  <button className={`control-btn share-btn ${screenSharing ? "active" : ""}`} onClick={toggleScreenShare}>
+    {screenSharing ? "Stop Sharing" : "Share Screen"}
+  </button>
+
+  <button className="control-btn end-call-btn" onClick={handleEndCall}>
+    End Call
+  </button>
+
+  
+
+  <button className="control-btn show-participants" onClick={toggleParticipants}>
   {showParticipants ? "Close Participants" : "Show Participants"}
 </button>
 
-      </div>
-    </div>
-  );
-};
+<button className="control-btn ai-summarizer" onClick={handleSummarizeMeeting}>
+  AI Summarizer
+</button>
+
+
+
+</div>
+
+  </div>
+);
+}
 
 export default VideoConference;
